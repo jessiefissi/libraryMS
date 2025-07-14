@@ -3,9 +3,11 @@ require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
 
+$auth = new Auth($db);
+
 // Check if user is admin
-if (!isAdmin()) {
-    header('Location: ../../auth/login.php');
+if (!$auth->isAdmin()) {
+    header('Location: ' . Auth::baseUrl() . '/auth/login.php');
     exit;
 }
 

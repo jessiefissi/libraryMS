@@ -35,7 +35,7 @@ if ($_POST && isset($_POST['confirm_delete'])) {
         $stmt = $pdo->prepare("DELETE FROM books WHERE id = ?");
         if ($stmt->execute([$book_id])) {
             $_SESSION['success'] = 'Book deleted successfully!';
-            header('Location: index.php');
+            header('Location: ' . Auth::baseUrl() . '/admin/books/index.php');
             exit();
         } else {
             $error = 'Failed to delete book. Please try again.';

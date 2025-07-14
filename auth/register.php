@@ -55,6 +55,8 @@ if ($_POST) {
         
         if ($stmt->execute([$name, $email, $hashed_password])) {
             $success = 'Registration successful! You can now login.';
+            header('Location: ' . Auth::baseUrl() . '/auth/login.php');
+            exit();
         } else {
             $errors[] = 'Registration failed. Please try again.';
         }

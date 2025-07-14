@@ -3,9 +3,9 @@ session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
-
+$auth = new Auth($db);
 // Check if user is admin
-if (!isLoggedIn() || !isAdmin()) {
+if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
     exit;
 }
@@ -184,4 +184,88 @@ $page_title = "Borrowing History";
                     
                     <!-- Results Summary -->
                     <div class="mb-4">
-                        <p class="text
+                        <p class="text-sm text-gray-500">
+                            Showing <?php echo count($issued_books); ?> of <?php echo $total_records; ?> results
+                        </p>
+                    </div>
+                    
+                    <!-- Issued Books Table -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white rounded-lg shadow-md">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700">
+                                    <th class="py-3 px-4 text-left text-sm font-medium">Book Title</th>
+                                    <th class="py-3 px-4 text-left text-sm font-medium">Author</th>
+                                    <th class="py-3 px-4 text-left text-sm font-medium">Borrower</th>
+                                    <th class="py-3 px-4 text-left text-sm font-medium">Email</th>
+                                    <th class="py-3 px-4 text-left text-sm font-medium">Issue Date</th>
+                                    <th class="py-3 px-4 text-left text-sm font-medium">Due Date</th>
+                                    <th class="py-3 px-4 text-left text-sm font-medium">Status</th>
+                                    <th class="py-3 px-4 text-left text-sm font-medium"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-600">
+                                <?php if (empty($issued_books)): ?>
+                                    <tr>
+                                        <td colspan="8" class="py-4 px-6 text-center text-sm text-gray-500">
+                                            No records found.
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($issued_books as $book): ?>
+                                        <tr class="hover:bg-gray-50 transition">
+                                            <td class="py-3 px-4 text-sm"><?php echo htmlspecialchars($book['title']); ?></td>
+                                            <td class="py-3 px-4 text-sm"><?php echo htmlspecialchars($book['author']); ?></td>
+                                            <td class="py-3 px-4 text-sm"><?php echo htmlspecialchars($book['user_name']); ?></td>
+                                            <td class="py-3 px-4 text-sm"><?php echo htmlspecialchars($book['user_email']); ?></td>
+                                            <td class="py-3 px-4 text-sm"><?php echo date('Y-m-d', strtotime($book['issue_date'])); ?></td>
+                                            <td class="py-3 px-4 text-sm"><?php echo date('Y-m-d', strtotime($book['due_date'])); ?></td>
+                                            <td class="py-3 px-4 text-sm">
+                                                <?php if ($book['display_status'] === 'overdue'): ?>
+                                                    <span class="text-red-500 font-semibold"><?php echo htmlspecialchars($book['display_status']); ?></span>
+                                                <?php else: ?>
+                                                    <span class="text-green-500 font-semibold"><?php echo htmlspecialchars($book['display_status']); ?></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="py-3 px-4 text-sm text-right">
+                                                <a href="view.php?id=<?php echo $book['id']; ?>" class="text-blue-500 hover:text-blue-600 transition">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <div class="mt-4">
+                        <nav class="flex justify-between items-center" aria-label="Table navigation">
+                            <div class="flex-1 flex justify-between sm:hidden">
+                                <a href="#" class="prev text-sm font-medium text-gray-500 hover:text-gray-700">
+                                    Previous
+                                </a>
+                                <a href="#" class="next text-sm font-medium text-gray-500 hover:text-gray-700">
+                                    Next
+                                </a>
+                            </div>
+                            <div class="hidden sm:flex sm:flex-1 sm:justify-center">
+                                <a href="#" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+                                    Previous
+                                </a>
+                                <span class="px-4 py-2 text-sm text-gray-500">
+                                    Page <?php echo $current_page; ?> of <?php echo $total_pages; ?>
+                                </span>
+                                <a href="#" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+                                    Next
+                                </a>
+                            </div>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

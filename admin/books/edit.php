@@ -17,7 +17,7 @@ $stmt->execute([$book_id]);
 $book = $stmt->fetch();
 
 if (!$book) {
-    header('Location: index.php');
+    header('Location: ' . Auth::baseUrl() . '/admin/books/index.php');
     exit();
 }
 

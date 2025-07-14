@@ -56,6 +56,10 @@ if ($_POST) {
             $success = 'Book added successfully!';
             // Clear form data
             $_POST = [];
+            
+            // Redirect to books index page
+            header('Location: ' . Auth::baseUrl() . '/admin/books/index.php');
+            exit();
         } else {
             $errors[] = 'Failed to add book. Please try again.';
         }

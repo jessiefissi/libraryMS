@@ -7,7 +7,7 @@ require_once '../../includes/functions.php';
 
 // Check if user is admin
 
-if (!isLoggedIn() || !isAdmin()) {
+if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     header('Location: ../auth/login.php');
     exit;
 }

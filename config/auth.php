@@ -1,12 +1,36 @@
 <?php
 // config/auth.php
-session_start();
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 class Auth {
     private $db;
     
     public function __construct($database) {
-        $this->db = $database->getConnection();
+        if ($database instanceof Database) {
+            $this->db = $database->getConnection();
+        } else {
+            $this->db = $database;
+        }
+    }
+
+    // Dynamically get the base URL for the project
+    public static function baseUrl() {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $host = $_SERVER['HTTP_HOST'];
+        $scriptName = $_SERVER['SCRIPT_NAME'];
+        $projectFolder = explode('/', trim($scriptName, '/'));
+        if (count($projectFolder) > 1) {
+            $base = $protocol . $host . '/' . $projectFolder[0];
+        } else {
+            $base = $protocol . $host;
+        }
+        return $base;
     }
     
     public function login($email, $password) {
@@ -14,7 +38,7 @@ class Auth {
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $result = $stmt->get_result();
-        
+
         if ($result->num_rows == 1) {
             $user = $result->fetch_assoc();
             if (password_verify($password, $user['password'])) {
@@ -73,7 +97,7 @@ class Auth {
     
     public function requireLogin() {
         if (!$this->isLoggedIn()) {
-            header('Location: /auth/login.php');
+            header('Location: ' . self::baseUrl() . '/auth/login.php');
             exit();
         }
     }
@@ -81,7 +105,7 @@ class Auth {
     public function requireAdmin() {
         $this->requireLogin();
         if (!$this->isAdmin()) {
-            header('Location: /user/index.php');
+            header('Location: ' . self::baseUrl() . '/user/index.php');
             exit();
         }
     }

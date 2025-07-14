@@ -3,8 +3,10 @@ require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
 
+$auth = new Auth($db);
+
 // Check if user is admin
-if (!isAdmin()) {
+if (!$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
     exit;
 }
@@ -50,7 +52,7 @@ if ($_POST && isset($_POST['confirm_delete'])) {
             $stmt->execute([$id]);
             
             // Redirect with success message
-            header('Location: index.php?deleted=1');
+            header('Location: ' . Auth::baseUrl() . '/admin/categories/index.php?deleted=1');
             exit;
         }
     } catch (PDOException $e) {

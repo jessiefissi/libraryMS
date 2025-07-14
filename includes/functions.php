@@ -168,4 +168,16 @@ function generateAlert($type, $message) {
         </div>
     </div>";
 }
+
+function getCurrentUser() {
+    if (isset($_SESSION['user_id'])) {
+        return [
+            'id' => $_SESSION['user_id'],
+            'name' => $_SESSION['user_name'] ?? '',
+            'email' => $_SESSION['user_email'] ?? '',
+            'role' => $_SESSION['user_role'] ?? '',
+        ];
+    }
+    return null;
+}
 ?>

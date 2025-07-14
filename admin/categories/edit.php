@@ -3,8 +3,10 @@ require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
 
+$auth = new Auth($db);
+
 // Check if user is admin
-if (!isAdmin()) {
+if (!$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
     exit;
 }
@@ -17,7 +19,7 @@ $category = null;
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($id <= 0) {
-    header('Location: index.php');
+    header('Location: ' . Auth::baseUrl() . '/admin/categories/index.php');
     exit;
 }
 
@@ -28,7 +30,7 @@ try {
     $category = $stmt->fetch();
     
     if (!$category) {
-        header('Location: index.php');
+        header('Location: ' . Auth::baseUrl() . '/admin/categories/index.php');
         exit;
     }
 } catch (PDOException $e) {

@@ -17,6 +17,11 @@ if (ini_get("session.use_cookies")) {
 session_destroy();
 
 // Redirect to login page
-header('Location: login.php?message=logged_out');
+require_once '../config/database.php';
+require_once '../config/auth.php';
+
+$auth = new Auth($db);
+$auth->logout();
+header('Location: ' . Auth::baseUrl() . '/auth/login.php');
 exit();
 ?>

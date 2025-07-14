@@ -5,7 +5,7 @@ require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
 
 // Check if user is logged in and is admin
-if (!isLoggedIn() || !isAdmin()) {
+if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     redirect('/auth/login.php');
 }
 
@@ -16,6 +16,7 @@ if (!$user_id) {
 
 $database = new Database();
 $db = $database->getConnection();
+$auth = new Auth($db);
 
 // Fetch user details
 $query = "SELECT * FROM users WHERE id = ?";

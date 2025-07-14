@@ -3,8 +3,12 @@ require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
 
+$database = new Database();
+$db = $database->getConnection();
+$auth = new Auth($db);
+
 // Check if user is admin
-if (!isAdmin()) {
+if (!$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
     exit;
 }
@@ -84,3 +88,9 @@ include '../../includes/header.php';
 </div>
 
 <?php include '../../includes/footer.php'; ?>
+
+<?php
+// Example usage after successful add:
+// header('Location: ' . Auth::baseUrl() . '/admin/categories/index.php');
+// exit();
+?>

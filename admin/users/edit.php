@@ -4,8 +4,10 @@ require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
 
+$auth = new Auth($db);
+
 // Check if user is logged in and is admin
-if (!isLoggedIn() || !isAdmin()) {
+if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     redirect('/auth/login.php');
 }
 
