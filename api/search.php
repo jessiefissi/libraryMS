@@ -3,7 +3,6 @@
 require_once '../config/database.php';
 // Use $db for $db->prepare(), or $conn for raw queries
 header('Content-Type: application/json');
-$db = getDBConnection();
 $q = $_GET['q'] ?? '';
 $results = [];
 if ($q) {

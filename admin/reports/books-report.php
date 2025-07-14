@@ -4,7 +4,9 @@ require_once '../../config/database.php';
 require_once '../../config/auth.php';
 
 // Check if user is logged in and is admin
-if (!isLoggedIn() || !isAdmin()) {
+$auth = new Auth($db);
+
+if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
     exit();
 }

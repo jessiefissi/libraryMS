@@ -3,13 +3,12 @@
 session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
-
-if (!isLoggedIn() || $_SESSION['role'] !== 'user') {
+$auth = new Auth($db);
+if (!$auth->isLoggedIn() || $_SESSION['user_role'] !== 'user') {
     header('Location: ../../auth/login.php');
     exit();
 }
 
-$db = getDBConnection();
 $user_id = $_SESSION['user_id'];
 
 $stmt = $db->prepare("SELECT ib.*, b.title, b.author, b.isbn, b.category_id, c.name as category, ib.return_date FROM issued_books ib JOIN books b ON ib.book_id = b.id LEFT JOIN categories c ON b.category_id = c.id WHERE ib.user_id = ? AND ib.status = 'issued' ORDER BY ib.issue_date DESC");

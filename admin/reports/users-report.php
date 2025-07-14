@@ -2,9 +2,8 @@
 session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
-
-// Check if user is logged in and is admin
-if (!isLoggedIn() || !isAdmin()) {
+$auth = new Auth($db);
+if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
     exit();
 }
@@ -458,4 +457,79 @@ try {
                             tooltipFormat: 'MMM D',
                             displayFormats: {
                                 day: 'MMM D'
-                           
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        },
+                        ticks: {
+                            autoSkip: true,
+                            maxTicksLimit: 10
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Active Users'
+                        },
+                        ticks: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            }
+        });
+
+        // Weekly Activity Pattern Chart
+        const weeklyActivityCtx = document.getElementById('weeklyActivityChart').getContext('2d');
+        const weeklyActivityChart = new Chart(weeklyActivityCtx, {
+            type: 'bar',
+            data: {
+                labels: <?php echo json_encode(array_column($weeklyActivity, 'day_name')); ?>,
+                datasets: [{
+                    label: 'Issues Count',
+                    data: <?php echo json_encode(array_column($weeklyActivity, 'issues_count')); ?>,
+                    backgroundColor: 'rgb(34, 197, 94)',
+                    borderColor: 'rgb(22, 163, 74)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(tooltipItem) {
+                                return `Issues: ${tooltipItem.raw}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Day of the Week'
+                        },
+                        ticks: {
+                            autoSkip: false
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Issues Count'
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -3,8 +3,8 @@
 session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
-
-if (!isLoggedIn() || $_SESSION['role'] !== 'user') {
+$auth = new Auth($db);
+if (!$auth->isLoggedIn() || $_SESSION['user_role'] !== 'user') {
     header('Location: ../../auth/login.php');
     exit();
 }

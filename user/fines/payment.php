@@ -3,13 +3,13 @@
 session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
+$auth = new Auth($db);
 
-if (!isLoggedIn() || $_SESSION['role'] !== 'user') {
+if (!$auth->isLoggedIn() || $_SESSION['role'] !== 'user') {
     header('Location: ../../auth/login.php');
     exit();
 }
 
-$db = getDBConnection();
 $user_id = $_SESSION['user_id'];
 $fine_id = $_GET['id'] ?? null;
 
