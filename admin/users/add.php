@@ -2,7 +2,8 @@
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
-
+$database = new Database();
+$db = $database->getConnection();
 $auth = new Auth($db);
 
 // Check if user is admin
@@ -38,21 +39,34 @@ if ($_POST) {
         $error = 'Invalid role selected';
     } else {
         // Check if email already exists
-        try {
-            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
-            $stmt->execute([$email]);
-            if ($stmt->fetch()) {
-                $error = 'Email already exists';
+        $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
+        if (!$stmt) {
+            $error = 'Database error: ' . $db->error;
+        } else {
+            $stmt->bind_param('s', $email);
+            if (!$stmt->execute()) {
+                $error = 'Database error: ' . $stmt->error;
             } else {
-                // Insert new user
-                $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$name, $email, $hashedPassword, $role]);
-                $success = 'User added successfully!';
-                $_POST = array(); // Clear form
+                $result = $stmt->get_result();
+                if ($result && $result->fetch_assoc()) {
+                    $error = 'Email already exists';
+                } else {
+                    // Insert new user
+                    $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+                    $stmt = $db->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)");
+                    if (!$stmt) {
+                        $error = 'Database error: ' . $db->error;
+                    } else {
+                        $stmt->bind_param('ssss', $name, $email, $hashedPassword, $role);
+                        if ($stmt->execute()) {
+                            $success = 'User added successfully!';
+                            $_POST = array(); // Clear form
+                        } else {
+                            $error = 'Error adding user: ' . $stmt->error;
+                        }
+                    }
+                }
             }
-        } catch (PDOException $e) {
-            $error = 'Error adding user: ' . $e->getMessage();
         }
     }
 }

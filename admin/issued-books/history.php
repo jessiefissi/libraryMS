@@ -3,6 +3,8 @@ session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
+$database = new Database();
+$db = $database->getConnection();
 $auth = new Auth($db);
 // Check if user is admin
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
@@ -75,18 +77,28 @@ $query = "SELECT ib.*, b.title, b.author, u.name as user_name, u.email as user_e
 
 try {
     // Get total count
-    $count_stmt = $pdo->prepare($count_query);
-    $count_stmt->execute($params);
-    $total_records = $count_stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    $count_stmt = $db->prepare($count_query);
+    if (!empty($params)) {
+        $types = str_repeat('s', count($params));
+        $count_stmt->bind_param($types, ...$params);
+    }
+    $count_stmt->execute();
+    $result = $count_stmt->get_result();
+    $total_records = $result->fetch_assoc()['total'];
     
     // Get paginated results
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $issued_books = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare($query);
+    if (!empty($params)) {
+        $types = str_repeat('s', count($params));
+        $stmt->bind_param($types, ...$params);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $issued_books = $result->fetch_all(MYSQLI_ASSOC);
     
     $total_pages = ceil($total_records / $records_per_page);
     
-} catch (PDOException $e) {
+} catch (Exception $e) {
     $error = "Database error: " . $e->getMessage();
     $issued_books = [];
     $total_pages = 0;
@@ -219,7 +231,9 @@ $page_title = "Borrowing History";
                                             <td class="py-3 px-4 text-sm"><?php echo htmlspecialchars($book['user_name']); ?></td>
                                             <td class="py-3 px-4 text-sm"><?php echo htmlspecialchars($book['user_email']); ?></td>
                                             <td class="py-3 px-4 text-sm"><?php echo date('Y-m-d', strtotime($book['issue_date'])); ?></td>
-                                            <td class="py-3 px-4 text-sm"><?php echo date('Y-m-d', strtotime($book['due_date'])); ?></td>
+                                            <td class="py-3 px-4 text-sm">
+                                                <?php echo isset($book['due_date']) && $book['due_date'] ? date('Y-m-d', strtotime($book['due_date'])) : '-'; ?>
+                                            </td>
                                             <td class="py-3 px-4 text-sm">
                                                 <?php if ($book['display_status'] === 'overdue'): ?>
                                                     <span class="text-red-500 font-semibold"><?php echo htmlspecialchars($book['display_status']); ?></span>

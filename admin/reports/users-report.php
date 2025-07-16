@@ -1,140 +1,161 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
+$database = new Database();
+$db = $database->getConnection();
 $auth = new Auth($db);
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
     exit();
 }
 
+$error = '';
+
 // Get filter parameters
 $date_from = $_GET['date_from'] ?? date('Y-m-d', strtotime('-30 days'));
 $date_to = $_GET['date_to'] ?? date('Y-m-d');
 $user_type = $_GET['user_type'] ?? 'all';
 
-try {
-    // Get user statistics
-    $stmt = $db->prepare("
-        SELECT 
-            u.id,
-            u.name,
-            u.email,
-            u.role,
-            COUNT(DISTINCT ib.id) as total_issues,
-            COUNT(DISTINCT CASE WHEN ib.status = 'issued' THEN ib.id END) as current_issues,
-            COUNT(DISTINCT CASE WHEN ib.status = 'returned' THEN ib.id END) as returned_books,
-            COUNT(DISTINCT f.id) as total_fines,
-            COALESCE(SUM(f.amount), 0) as fine_amount,
-            MAX(ib.issue_date) as last_activity,
-            COUNT(DISTINCT CASE WHEN ib.return_date < NOW() AND ib.status = 'issued' THEN ib.id END) as overdue_books
-        FROM users u
-        LEFT JOIN issued_books ib ON u.id = ib.user_id
-        LEFT JOIN fines f ON u.id = f.user_id
-        WHERE u.role = 'user'
-        " . ($user_type == 'active' ? "AND ib.issue_date BETWEEN ? AND ?" : "") . "
-        GROUP BY u.id, u.name, u.email, u.role
-        ORDER BY total_issues DESC
-    ");
-
+// Get user statistics
+$stmt = $db->prepare("
+    SELECT 
+        u.id,
+        u.name,
+        u.email,
+        u.role,
+        COUNT(DISTINCT ib.id) as total_issues,
+        COUNT(DISTINCT CASE WHEN ib.status = 'issued' THEN ib.id END) as current_issues,
+        COUNT(DISTINCT CASE WHEN ib.status = 'returned' THEN ib.id END) as returned_books,
+        COUNT(DISTINCT f.id) as total_fines,
+        COALESCE(SUM(f.amount), 0) as fine_amount,
+        MAX(ib.issue_date) as last_activity,
+        COUNT(DISTINCT CASE WHEN ib.return_date < NOW() AND ib.status = 'issued' THEN ib.id END) as overdue_books
+    FROM users u
+    LEFT JOIN issued_books ib ON u.id = ib.user_id
+    LEFT JOIN fines f ON u.id = f.user_id
+    WHERE u.role = 'user'
+    " . ($user_type == 'active' ? "AND ib.issue_date BETWEEN ? AND ?" : "") . "
+    GROUP BY u.id, u.name, u.email, u.role
+    ORDER BY total_issues DESC
+");
+if (!$stmt) {
+    $error = 'Database error: ' . $db->error;
+    $users = [];
+} else {
     if ($user_type == 'active') {
-        $stmt->execute([$date_from, $date_to]);
+        $stmt->bind_param('ss', $date_from, $date_to);
+        $stmt->execute();
     } else {
         $stmt->execute();
     }
-    $users = $stmt->fetchAll();
-
-    // Get most active users
-    $stmt = $db->prepare("
-        SELECT 
-            u.name,
-            u.email,
-            COUNT(ib.id) as issue_count
-        FROM users u
-        JOIN issued_books ib ON u.id = ib.user_id
-        WHERE ib.issue_date BETWEEN ? AND ?
-        GROUP BY u.id, u.name, u.email
-        ORDER BY issue_count DESC
-        LIMIT 10
-    ");
-    $stmt->execute([$date_from, $date_to]);
-    $activeUsers = $stmt->fetchAll();
-
-    // Get new registrations
-    $stmt = $db->prepare("
-        SELECT 
-            DATE(u.created_at) as registration_date,
-            COUNT(*) as new_users
-        FROM users u
-        WHERE u.role = 'user' AND u.created_at BETWEEN ? AND ?
-        GROUP BY DATE(u.created_at)
-        ORDER BY registration_date DESC
-        LIMIT 30
-    ");
-    // Note: created_at field might not exist in your schema, using a mock query
-    $stmt = $db->prepare("
-        SELECT 
-            DATE(ib.issue_date) as activity_date,
-            COUNT(DISTINCT ib.user_id) as active_users
-        FROM issued_books ib
-        WHERE ib.issue_date BETWEEN ? AND ?
-        GROUP BY DATE(ib.issue_date)
-        ORDER BY activity_date DESC
-        LIMIT 30
-    ");
-    $stmt->execute([$date_from, $date_to]);
-    $dailyActivity = $stmt->fetchAll();
-
-    // Get summary statistics
-    $stmt = $db->query("
-        SELECT 
-            COUNT(DISTINCT u.id) as total_users,
-            COUNT(DISTINCT ib.user_id) as active_users,
-            COUNT(DISTINCT CASE WHEN ib.status = 'issued' THEN ib.user_id END) as users_with_books,
-            COUNT(DISTINCT f.user_id) as users_with_fines,
-            ROUND(AVG(user_issues.issue_count), 2) as avg_issues_per_user
-        FROM users u
-        LEFT JOIN issued_books ib ON u.id = ib.user_id
-        LEFT JOIN fines f ON u.id = f.user_id
-        LEFT JOIN (
-            SELECT user_id, COUNT(*) as issue_count
-            FROM issued_books
-            GROUP BY user_id
-        ) user_issues ON u.id = user_issues.user_id
-        WHERE u.role = 'user'
-    ");
-    $summary = $stmt->fetch();
-
-    // Get user activity patterns
-    $stmt = $db->query("
-        SELECT 
-            DAYNAME(ib.issue_date) as day_name,
-            COUNT(*) as issues_count
-        FROM issued_books ib
-        WHERE ib.issue_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-        GROUP BY DAYNAME(ib.issue_date), DAYOFWEEK(ib.issue_date)
-        ORDER BY DAYOFWEEK(ib.issue_date)
-    ");
-    $weeklyActivity = $stmt->fetchAll();
-
-    // Get users with overdue books
-    $stmt = $db->query("
-        SELECT 
-            u.name,
-            u.email,
-            COUNT(ib.id) as overdue_count,
-            MAX(DATEDIFF(NOW(), ib.return_date)) as max_days_overdue
-        FROM users u
-        JOIN issued_books ib ON u.id = ib.user_id
-        WHERE ib.status = 'issued' AND ib.return_date < NOW()
-        GROUP BY u.id, u.name, u.email
-        ORDER BY overdue_count DESC, max_days_overdue DESC
-    ");
-    $overdueUsers = $stmt->fetchAll();
-} catch (PDOException $e) {
-    $error = "Database error: " . $e->getMessage();
+    $result = $stmt->get_result();
+    $users = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $stmt->close();
 }
 
+// Get most active users
+$stmt = $db->prepare("
+    SELECT 
+        u.name,
+        u.email,
+        COUNT(ib.id) as issue_count
+    FROM users u
+    JOIN issued_books ib ON u.id = ib.user_id
+    WHERE ib.issue_date BETWEEN ? AND ?
+    GROUP BY u.id, u.name, u.email
+    ORDER BY issue_count DESC
+    LIMIT 10
+");
+if (!$stmt) {
+    $error = 'Database error: ' . $db->error;
+    $mostActiveUsers = [];
+} else {
+    $stmt->bind_param('ss', $date_from, $date_to);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $mostActiveUsers = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $stmt->close();
+}
+
+// Get daily activity
+$stmt = $db->prepare("
+    SELECT 
+        DATE(ib.issue_date) as activity_date,
+        COUNT(DISTINCT ib.user_id) as active_users
+    FROM issued_books ib
+    WHERE ib.issue_date BETWEEN ? AND ?
+    GROUP BY DATE(ib.issue_date)
+    ORDER BY activity_date DESC
+    LIMIT 30
+");
+if (!$stmt) {
+    $error = 'Database error: ' . $db->error;
+    $dailyActivity = [];
+} else {
+    $stmt->bind_param('ss', $date_from, $date_to);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $dailyActivity = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $stmt->close();
+}
+
+// Get summary statistics
+$result = $db->query("
+    SELECT 
+        COUNT(DISTINCT u.id) as total_users,
+        COUNT(DISTINCT ib.user_id) as active_users,
+        COUNT(DISTINCT CASE WHEN ib.status = 'issued' THEN ib.user_id END) as users_with_books,
+        COUNT(DISTINCT f.user_id) as users_with_fines,
+        ROUND(AVG(user_issues.issue_count), 2) as avg_issues_per_user
+    FROM users u
+    LEFT JOIN issued_books ib ON u.id = ib.user_id
+    LEFT JOIN fines f ON u.id = f.user_id
+    LEFT JOIN (
+        SELECT user_id, COUNT(*) as issue_count
+        FROM issued_books
+        GROUP BY user_id
+    ) user_issues ON u.id = user_issues.user_id
+    WHERE u.role = 'user'
+");
+$summary = $result ? $result->fetch_assoc() : [
+    'total_users' => 0,
+    'active_users' => 0,
+    'users_with_books' => 0,
+    'users_with_fines' => 0,
+    'avg_issues_per_user' => 0
+];
+
+// Get user activity patterns
+$result = $db->query("
+    SELECT 
+        DAYNAME(ib.issue_date) as day_name,
+        COUNT(*) as issues_count
+    FROM issued_books ib
+    WHERE ib.issue_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    GROUP BY DAYNAME(ib.issue_date), DAYOFWEEK(ib.issue_date)
+    ORDER BY DAYOFWEEK(ib.issue_date)
+");
+$weeklyActivity = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+
+// Get users with overdue books
+$result = $db->query("
+    SELECT 
+        u.name,
+        u.email,
+        COUNT(ib.id) as overdue_count,
+        MAX(DATEDIFF(NOW(), ib.return_date)) as max_days_overdue
+    FROM users u
+    JOIN issued_books ib ON u.id = ib.user_id
+    WHERE ib.status = 'issued' AND ib.return_date < NOW()
+    GROUP BY u.id, u.name, u.email
+    ORDER BY overdue_count DESC, max_days_overdue DESC
+");
+$overdueUsers = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
 ?>
 
 <!DOCTYPE html>
@@ -143,7 +164,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Users Report - Library Management</title>
+    <title>Users Report - Library Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -160,7 +181,8 @@ try {
                 <div class="flex justify-between items-center">
                     <div>
                         <h1 class="text-3xl font-bold text-gray-800">Users Report</h1>
-                        <p class="text-gray-600 mt-2">User activity and engagement metrics</p>
+                        <p class="text-gray-600 mt-2">User activity and engagement metrics (Library Operations System)
+                        </p>
                     </div>
                     <div class="flex space-x-2">
                         <button onclick="window.print()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
@@ -265,7 +287,7 @@ try {
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <?php foreach ($activeUsers as $index => $user): ?>
+                                <?php foreach ($mostActiveUsers as $index => $user): ?>
                                     <tr>
                                         <td class="px-4 py-4 whitespace-nowrap">
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">

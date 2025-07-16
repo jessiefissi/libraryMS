@@ -5,6 +5,7 @@ require_once '../../includes/functions.php';
 
 $database = new Database();
 $db = $database->getConnection();
+$conn = $db->getConnection();
 $auth = new Auth($db);
 
 // Check if user is admin
@@ -23,7 +24,7 @@ if ($_POST) {
         $error = 'Category name is required';
     } else {
         try {
-            $stmt = $pdo->prepare("INSERT INTO categories (name) VALUES (?)");
+            $stmt = $conn->prepare("INSERT INTO categories (name) VALUES (?)");
             $stmt->execute([$name]);
             $success = 'Category added successfully!';
             $_POST = array(); // Clear form

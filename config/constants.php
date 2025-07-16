@@ -2,7 +2,7 @@
 // Application Constants
 define('APP_NAME', 'Library Management System');
 define('APP_VERSION', '1.0.0');
-define('APP_URL', 'http://localhost/library-management-system');
+define('APP_URL', 'http://localhost/libraryMS');
 
 // Database Constants
 define('DB_HOST', 'localhost');

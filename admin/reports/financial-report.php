@@ -3,42 +3,71 @@
 session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
+$database = new Database();
+$db = $database->getConnection();
 $auth = new Auth($db);
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
     exit();
 }
 
-require_once '../../config/database.php'; // Use $db for $db->prepare(), or $conn for raw queries
 $date_from = $_GET['date_from'] ?? date('Y-m-01');
 $date_to = $_GET['date_to'] ?? date('Y-m-d');
+
+$error = '';
+$total_collected = 0;
+$outstanding = 0;
+$topUsers = [];
+$topBooks = [];
+$dailyTrend = [];
 
 try {
     // Total fines collected
     $stmt = $db->prepare("SELECT COALESCE(SUM(amount),0) as total_collected FROM fines WHERE due_date BETWEEN ? AND ?");
-    $stmt->execute([$date_from, $date_to]);
-    $total_collected = $stmt->fetchColumn();
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
+    $stmt->bind_param('ss', $date_from, $date_to);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $total_collected = $row ? $row['total_collected'] : 0;
+    $stmt->close();
 
     // Outstanding fines
     $stmt = $db->prepare("SELECT COALESCE(SUM(amount),0) as outstanding FROM fines WHERE due_date < NOW()");
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
     $stmt->execute();
-    $outstanding = $stmt->fetchColumn();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $outstanding = $row ? $row['outstanding'] : 0;
+    $stmt->close();
 
     // Fines by user
     $stmt = $db->prepare("SELECT u.name, u.email, SUM(f.amount) as user_fines FROM users u JOIN fines f ON u.id = f.user_id WHERE f.due_date BETWEEN ? AND ? GROUP BY u.id, u.name, u.email ORDER BY user_fines DESC LIMIT 10");
-    $stmt->execute([$date_from, $date_to]);
-    $topUsers = $stmt->fetchAll();
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
+    $stmt->bind_param('ss', $date_from, $date_to);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $topUsers = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $stmt->close();
 
     // Fines by book
     $stmt = $db->prepare("SELECT b.title, SUM(f.amount) as book_fines FROM books b JOIN fines f ON b.id = f.book_id WHERE f.due_date BETWEEN ? AND ? GROUP BY b.id, b.title ORDER BY book_fines DESC LIMIT 10");
-    $stmt->execute([$date_from, $date_to]);
-    $topBooks = $stmt->fetchAll();
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
+    $stmt->bind_param('ss', $date_from, $date_to);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $topBooks = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $stmt->close();
 
     // Daily fines trend
     $stmt = $db->prepare("SELECT DATE(due_date) as day, SUM(amount) as total FROM fines WHERE due_date BETWEEN ? AND ? GROUP BY day ORDER BY day");
-    $stmt->execute([$date_from, $date_to]);
-    $dailyTrend = $stmt->fetchAll();
-} catch (PDOException $e) {
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
+    $stmt->bind_param('ss', $date_from, $date_to);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $dailyTrend = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $stmt->close();
+} catch (Exception $e) {
     $error = "Database error: " . $e->getMessage();
 }
 ?>
@@ -47,7 +76,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Report - Library Management</title>
+    <title>Financial Report - Library Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -57,7 +86,7 @@ try {
     <?php include '../../includes/sidebar.php'; ?>
     <main class="flex-1 p-6">
         <h1 class="text-3xl font-bold mb-4">Financial Report</h1>
-        <?php if (isset($error)): ?>
+        <?php if ($error): ?>
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                 <?php echo htmlspecialchars($error); ?>
             </div>

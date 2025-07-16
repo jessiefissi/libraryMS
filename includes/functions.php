@@ -180,4 +180,27 @@ function getCurrentUser() {
     }
     return null;
 }
+
+function redirect($url) {
+    if (!headers_sent()) {
+        header('Location: ' . $url);
+        exit;
+    }
+}
+
+function requireAdmin() {
+    global $auth;
+    if (!isset($auth)) {
+        // Try to instantiate if not present
+        if (class_exists('Auth')) {
+            global $db;
+            $auth = new Auth($db);
+        } else {
+            redirect('/auth/login.php');
+        }
+    }
+    if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
+        redirect('/auth/login.php');
+    }
+}
 ?>

@@ -4,7 +4,9 @@ require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
 
 $auth = new Auth($db);
-
+$database = new Database();
+$db = $database->getConnection();
+$conn = $db->getConnection();
 // Check if user is admin
 if (!$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
@@ -25,7 +27,7 @@ if ($id <= 0) {
 
 // Fetch category data
 try {
-    $stmt = $pdo->prepare("SELECT * FROM categories WHERE id = ?");
+    $stmt = $conn->prepare("SELECT * FROM categories WHERE id = ?");
     $stmt->execute([$id]);
     $category = $stmt->fetch();
     
@@ -45,7 +47,7 @@ if ($_POST) {
         $error = 'Category name is required';
     } else {
         try {
-            $stmt = $pdo->prepare("UPDATE categories SET name = ? WHERE id = ?");
+            $stmt = $conn->prepare("UPDATE categories SET name = ? WHERE id = ?");
             $stmt->execute([$name, $id]);
             $success = 'Category updated successfully!';
             $category['name'] = $name; // Update local data

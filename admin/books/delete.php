@@ -3,16 +3,19 @@ session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
-
+$database = new Database();
+$db = $database->getConnection();
 // Check if user is admin
 requireAdmin();
 
 $book_id = $_GET['id'] ?? 0;
 
 // Get book data
-$stmt = $pdo->prepare("SELECT * FROM books WHERE id = ?");
-$stmt->execute([$book_id]);
-$book = $stmt->fetch();
+$stmt = $db->prepare("SELECT * FROM books WHERE id = ?");
+$stmt->bind_param('i', $book_id);
+$stmt->execute();
+$result = $stmt->get_result();
+$book = $result->fetch_assoc();
 
 if (!$book) {
     header('Location: index.php');
@@ -20,25 +23,28 @@ if (!$book) {
 }
 
 // Check if book has any issued copies
-$stmt = $pdo->prepare("SELECT COUNT(*) as issued FROM issued_books WHERE book_id = ? AND status = 'issued'");
-$stmt->execute([$book_id]);
-$issued_count = $stmt->fetch()['issued'];
+$stmt = $db->prepare("SELECT COUNT(*) as issued FROM issued_books WHERE book_id = ? AND status = 'issued'");
+$stmt->bind_param('i', $book_id);
+$stmt->execute();
+$result = $stmt->get_result();
+$issued_count = $result->fetch_assoc()['issued'];
 
 $error = '';
 $success = '';
 
 if ($_POST && isset($_POST['confirm_delete'])) {
     if ($issued_count > 0) {
-        $error = 'Cannot delete book with issued copies. Please return all copies first.';
+        $error = 'This book has ' . $issued_count . ' copies currently issued to users. You must return all issued copies before deleting this book.';
     } else {
         // Delete book
-        $stmt = $pdo->prepare("DELETE FROM books WHERE id = ?");
-        if ($stmt->execute([$book_id])) {
+        $stmt = $db->prepare("DELETE FROM books WHERE id = ?");
+        $stmt->bind_param('i', $book_id);
+        if ($stmt->execute()) {
             $_SESSION['success'] = 'Book deleted successfully!';
             header('Location: ' . Auth::baseUrl() . '/admin/books/index.php');
             exit();
         } else {
-            $error = 'Failed to delete book. Please try again.';
+            $error = 'Failed to delete book.';
         }
     }
 }

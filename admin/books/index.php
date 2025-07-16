@@ -3,7 +3,9 @@ session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
-
+$database = new Database();
+$db = $database->getConnection();
+$auth = new Auth($db);
 // Check if user is admin
 requireAdmin();
 
@@ -33,12 +35,18 @@ if (!empty($category_filter)) {
 
 $query .= " ORDER BY b.title ASC";
 
-$stmt = $pdo->prepare($query);
-$stmt->execute($params);
-$books = $stmt->fetchAll();
+$stmt = $db->prepare($query);
+if (!empty($params)) {
+    $types = str_repeat('s', count($params));
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$result = $stmt->get_result();
+$books = $result->fetch_all(MYSQLI_ASSOC);
 
 // Get categories for filter
-$categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
+$catStmt = $db->query("SELECT * FROM categories ORDER BY name ASC");
+$categories = $catStmt->fetch_all(MYSQLI_ASSOC);
 
 $page_title = 'Books Management';
 include '../../includes/header.php';
@@ -104,7 +112,7 @@ include '../../includes/header.php';
                                 <td colspan="7" class="px-6 py-12 text-center text-gray-500">
                                     <div class="flex flex-col items-center">
                                         <svg class="h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                            <path stroke-linecap="round"
                                                   d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
                                         </svg>
                                         <p class="text-lg font-medium">No books found</p>
@@ -116,10 +124,14 @@ include '../../includes/header.php';
                             <?php foreach ($books as $book): ?>
                                 <?php
                                 // Get available quantity
-                                $stmt = $pdo->prepare("SELECT COUNT(*) as issued FROM issued_books WHERE book_id = ? AND status = 'issued'");
-                                $stmt->execute([$book['id']]);
-                                $issued_count = $stmt->fetch()['issued'];
+                                $stmt = $db->prepare("SELECT COUNT(*) as issued FROM issued_books WHERE book_id = ? AND status = 'issued'");
+                                $stmt->bind_param('i', $book['id']);
+                                $stmt->execute();
+                                $result = $stmt->get_result();
+                                $issued_row = $result->fetch_assoc();
+                                $issued_count = $issued_row ? $issued_row['issued'] : 0;
                                 $available = $book['quantity'] - $issued_count;
+                                $stmt->close();
                                 ?>
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-6 py-4 whitespace-nowrap">

@@ -4,6 +4,8 @@ require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
 
+$database = new Database();
+$db = $database->getConnection();
 $auth = new Auth($db);
 
 // Check if user is logged in and is admin
@@ -16,15 +18,13 @@ if (!$user_id) {
     redirect('/admin/users/index.php');
 }
 
-$database = new Database();
-$db = $database->getConnection();
-
 // Fetch user details
 $query = "SELECT * FROM users WHERE id = ?";
 $stmt = $db->prepare($query);
-$stmt->bindParam(1, $user_id);
+$stmt->bind_param('i', $user_id);
 $stmt->execute();
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
+$result = $stmt->get_result();
+$user = $result->fetch_assoc();
 
 if (!$user) {
     redirect('/admin/users/index.php');
@@ -57,13 +57,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Check if email already exists (excluding current user)
     $emailQuery = "SELECT id FROM users WHERE email = ? AND id != ?";
     $emailStmt = $db->prepare($emailQuery);
-    $emailStmt->bindParam(1, $email);
-    $emailStmt->bindParam(2, $user_id);
+    $emailStmt->bind_param('si', $email, $user_id);
     $emailStmt->execute();
+    $emailStmt->store_result();
     
-    if ($emailStmt->rowCount() > 0) {
+    if ($emailStmt->num_rows > 0) {
         $errors[] = 'Email already exists';
     }
+    $emailStmt->close();
     
     if (empty($errors)) {
         try {
@@ -72,29 +73,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
                 $updateQuery = "UPDATE users SET name = ?, email = ?, role = ?, password = ? WHERE id = ?";
                 $updateStmt = $db->prepare($updateQuery);
-                $updateStmt->bindParam(1, $name);
-                $updateStmt->bindParam(2, $email);
-                $updateStmt->bindParam(3, $role);
-                $updateStmt->bindParam(4, $hashedPassword);
-                $updateStmt->bindParam(5, $user_id);
+                $updateStmt->bind_param('ssssi', $name, $email, $role, $hashedPassword, $user_id);
             } else {
                 // Update without changing password
                 $updateQuery = "UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?";
                 $updateStmt = $db->prepare($updateQuery);
-                $updateStmt->bindParam(1, $name);
-                $updateStmt->bindParam(2, $email);
-                $updateStmt->bindParam(3, $role);
-                $updateStmt->bindParam(4, $user_id);
+                $updateStmt->bind_param('sssi', $name, $email, $role, $user_id);
             }
             
             if ($updateStmt->execute()) {
                 $success = 'User updated successfully';
                 // Refresh user data
+                $stmt = $db->prepare($query);
+                $stmt->bind_param('i', $user_id);
                 $stmt->execute();
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                $result = $stmt->get_result();
+                $user = $result->fetch_assoc();
+                $stmt->close();
             } else {
                 $errors[] = 'Failed to update user';
             }
+            $updateStmt->close();
         } catch (PDOException $e) {
             $errors[] = 'Database error: ' . $e->getMessage();
         }
@@ -227,9 +226,14 @@ include '../../includes/header.php';
                                 LEFT JOIN fines f ON f.user_id = ib.user_id
                                 WHERE ib.user_id = ?";
                             $statsStmt = $db->prepare($statsQuery);
-                            $statsStmt->bindParam(1, $user_id);
+                            $statsStmt->bind_param('i', $user_id);
                             $statsStmt->execute();
-                            $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+                            $result = $statsStmt->get_result();
+                            $stats = $result->fetch_assoc();
+                            $statsStmt->close();
+                            if (!$stats) {
+                                $stats = ['current_books' => 0, 'total_borrowed' => 0, 'total_fines' => 0];
+                            }
                             ?>
                             
                             <div class="bg-blue-50 rounded-lg p-4">

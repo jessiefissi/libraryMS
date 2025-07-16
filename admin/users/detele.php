@@ -21,9 +21,10 @@ $auth = new Auth($db);
 // Fetch user details
 $query = "SELECT * FROM users WHERE id = ?";
 $stmt = $db->prepare($query);
-$stmt->bindParam(1, $user_id);
+$stmt->bind_param('i', $user_id);
 $stmt->execute();
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
+$result = $stmt->get_result();
+$user = $result->fetch_assoc();
 
 if (!$user) {
     redirect('/admin/users/index.php');
@@ -45,14 +46,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Please type "DELETE" to confirm deletion';
     } else {
         try {
-            $db->beginTransaction();
-            
+            $db->begin_transaction();
             // Check if user has any issued books
             $issuedQuery = "SELECT COUNT(*) as count FROM issued_books WHERE user_id = ? AND status = 'issued'";
             $issuedStmt = $db->prepare($issuedQuery);
-            $issuedStmt->bindParam(1, $user_id);
+            $issuedStmt->bind_param('i', $user_id);
             $issuedStmt->execute();
-            $issuedCount = $issuedStmt->fetch(PDO::FETCH_ASSOC)['count'];
+            $result = $issuedStmt->get_result();
+            $issuedCount = $result->fetch_assoc()['count'];
             
             if ($issuedCount > 0) {
                 $errors[] = 'Cannot delete user with active book loans. Please return all books first.';
@@ -61,18 +62,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Delete related records first
                 $deleteFinesQuery = "DELETE FROM fines WHERE user_id = ?";
                 $deleteFinesStmt = $db->prepare($deleteFinesQuery);
-                $deleteFinesStmt->bindParam(1, $user_id);
+                $deleteFinesStmt->bind_param('i', $user_id);
                 $deleteFinesStmt->execute();
                 
                 $deleteIssuedQuery = "DELETE FROM issued_books WHERE user_id = ?";
                 $deleteIssuedStmt = $db->prepare($deleteIssuedQuery);
-                $deleteIssuedStmt->bindParam(1, $user_id);
+                $deleteIssuedStmt->bind_param('i', $user_id);
                 $deleteIssuedStmt->execute();
                 
                 // Delete user
                 $deleteUserQuery = "DELETE FROM users WHERE id = ?";
                 $deleteUserStmt = $db->prepare($deleteUserQuery);
-                $deleteUserStmt->bindParam(1, $user_id);
+                $deleteUserStmt->bind_param('i', $user_id);
                 
                 if ($deleteUserStmt->execute()) {
                     $db->commit();
@@ -83,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors[] = 'Failed to delete user';
                 }
             }
-        } catch (PDOException $e) {
+        } catch (Exception $e) {
             $db->rollback();
             $errors[] = 'Database error: ' . $e->getMessage();
         }
@@ -101,9 +102,10 @@ $statsQuery = "SELECT
     WHERE u.id = ?
     GROUP BY u.id";
 $statsStmt = $db->prepare($statsQuery);
-$statsStmt->bindParam(1, $user_id);
+$statsStmt->bind_param('i', $user_id);
 $statsStmt->execute();
-$stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+$result = $statsStmt->get_result();
+$stats = $result->fetch_assoc();
 
 if (!$stats) {
     $stats = ['current_books' => 0, 'total_borrowed' => 0, 'total_fines' => 0];
@@ -226,4 +228,25 @@ include '../../includes/header.php';
                             </div>
                             <div class="ml-3">
                                 <h3 class="text-sm font-medium text-red-800">Confirm Deletion</h3>
-                            </div
+                            </div>
+                        </div>
+                        
+                        <p class="text-sm text-gray-600 mb-4">To confirm deletion of this user, please type <span class="font-medium">DELETE</span> in the input field below:</p>
+                        
+                        <form action="" method="POST" class="flex flex-col sm:flex-row sm:items-center">
+                            <input type="text" name="confirm_delete" class="flex-1 p-2 border border-gray-300 rounded-md mb-4 sm:mb-0 sm:mr-4" placeholder="Type DELETE to confirm" required>
+                            <button type="submit" class="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                                <svg class="h-5 w-5 mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                </svg>
+                                Delete User
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include '../../includes/footer.php'; ?>

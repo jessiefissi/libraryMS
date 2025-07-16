@@ -34,15 +34,17 @@ $query = "SELECT ib.*, b.title, b.author, u.name as user_name, u.email as user_e
           WHERE ib.id = ? AND ib.status = 'issued'";
 
 try {
-    $stmt = $pdo->prepare($query);
-    $stmt->execute([$issued_book_id]);
-    $issued_book = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare($query);
+    $stmt->bind_param('i', $issued_book_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $issued_book = $result->fetch_assoc();
     
     if (!$issued_book) {
         header('Location: index.php?error=' . urlencode('Invalid issued book ID or book already returned.'));
         exit;
     }
-} catch (PDOException $e) {
+} catch (Exception $e) {
     $error = "Database error: " . $e->getMessage();
 }
 
@@ -66,37 +68,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fine_amount_input = $_POST['fine_amount'] ?? 0;
     
     try {
-        $pdo->beginTransaction();
-        
+        $db->begin_transaction();
         // Update issued book status
         $update_query = "UPDATE issued_books SET status = 'returned', return_date = ? WHERE id = ?";
-        $update_stmt = $pdo->prepare($update_query);
-        $update_stmt->execute([$actual_return_date, $issued_book_id]);
-        
+        $update_stmt = $db->prepare($update_query);
+        $update_stmt->bind_param('si', $actual_return_date, $issued_book_id);
+        $update_stmt->execute();
         // Add fine if applicable
         if ($fine_amount_input > 0) {
             $fine_query = "INSERT INTO fines (user_id, book_id, amount, due_date) VALUES (?, ?, ?, ?)";
-            $fine_stmt = $pdo->prepare($fine_query);
-            $fine_stmt->execute([
-                $issued_book['user_id'], 
-                $issued_book['book_id'], 
-                $fine_amount_input, 
-                $actual_return_date
-            ]);
+            $fine_stmt = $db->prepare($fine_query);
+            $fine_stmt->bind_param('iids', $issued_book['user_id'], $issued_book['book_id'], $fine_amount_input, $actual_return_date);
+            $fine_stmt->execute();
         }
-        
-        $pdo->commit();
-        
+        $db->commit();
         $message = "Book returned successfully!";
         if ($fine_amount_input > 0) {
             $message .= " Fine of $" . number_format($fine_amount_input, 2) . " has been added.";
         }
-        
         header('Location: index.php?message=' . urlencode($message));
         exit;
-        
-    } catch (PDOException $e) {
-        $pdo->rollback();
+    } catch (Exception $e) {
+        $db->rollback();
         $error = "Database error: " . $e->getMessage();
     }
 }

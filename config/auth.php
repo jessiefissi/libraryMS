@@ -4,7 +4,8 @@
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-if (session_status() === PHP_SESSION_NONE) {
+// Only start session if not already started and no output has been sent
+if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
     session_start();
 }
 
@@ -97,16 +98,20 @@ class Auth {
     
     public function requireLogin() {
         if (!$this->isLoggedIn()) {
-            header('Location: ' . self::baseUrl() . '/auth/login.php');
-            exit();
+            if (!headers_sent()) {
+                header('Location: ' . self::baseUrl() . '/auth/login.php');
+                exit();
+            }
         }
     }
     
     public function requireAdmin() {
         $this->requireLogin();
         if (!$this->isAdmin()) {
-            header('Location: ' . self::baseUrl() . '/user/index.php');
-            exit();
+            if (!headers_sent()) {
+                header('Location: ' . self::baseUrl() . '/user/index.php');
+                exit();
+            }
         }
     }
 }

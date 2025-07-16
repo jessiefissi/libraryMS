@@ -11,7 +11,13 @@ $errors = [];
 $success = '';
 
 // Get categories for dropdown
-$categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
+$categories = [];
+$catResult = $db->query("SELECT * FROM categories ORDER BY name ASC");
+if ($catResult) {
+    while ($row = $catResult->fetch_assoc()) {
+        $categories[] = $row;
+    }
+}
 
 if ($_POST) {
     $title = trim($_POST['title']);
@@ -41,25 +47,30 @@ if ($_POST) {
     
     // Check if ISBN already exists
     if (empty($errors)) {
-        $stmt = $pdo->prepare("SELECT id FROM books WHERE isbn = ?");
-        $stmt->execute([$isbn]);
-        if ($stmt->fetch()) {
+        $stmt = $db->prepare("SELECT id FROM books WHERE isbn = ?");
+        $stmt->bind_param('s', $isbn);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->fetch_assoc()) {
             $errors[] = 'A book with this ISBN already exists';
         }
     }
     
     // Insert book if no errors
     if (empty($errors)) {
-        $stmt = $pdo->prepare("INSERT INTO books (title, author, isbn, category_id, quantity) VALUES (?, ?, ?, ?, ?)");
+        $stmt = $db->prepare("INSERT INTO books (title, author, isbn, category_id, quantity) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param('ssssi', $title, $author, $isbn, $category_id, $quantity);
         
-        if ($stmt->execute([$title, $author, $isbn, $category_id, $quantity])) {
+        if ($stmt->execute()) {
             $success = 'Book added successfully!';
             // Clear form data
             $_POST = [];
             
             // Redirect to books index page
-            header('Location: ' . Auth::baseUrl() . '/admin/books/index.php');
-            exit();
+            if (!headers_sent()) {
+                header('Location: ' . Auth::baseUrl() . '/admin/books/index.php');
+                exit();
+            }
         } else {
             $errors[] = 'Failed to add book. Please try again.';
         }

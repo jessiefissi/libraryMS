@@ -2,7 +2,9 @@
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
-
+$database = new Database();
+$db = $database->getConnection();
+$conn = $db->getConnection();
 $auth = new Auth($db);
 
 // Check if user is admin
@@ -24,7 +26,7 @@ if ($id <= 0) {
 
 // Check if category exists and get its name
 try {
-    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+    $stmt = $conn->prepare("SELECT name FROM categories WHERE id = ?");
     $stmt->execute([$id]);
     $category = $stmt->fetch();
     
@@ -40,7 +42,7 @@ try {
 if ($_POST && isset($_POST['confirm_delete'])) {
     try {
         // Check if category has books
-        $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM books WHERE category_id = ?");
+        $stmt = $conn->prepare("SELECT COUNT(*) as count FROM books WHERE category_id = ?");
         $stmt->execute([$id]);
         $result = $stmt->fetch();
         
@@ -48,7 +50,7 @@ if ($_POST && isset($_POST['confirm_delete'])) {
             $error = 'Cannot delete category. It has ' . $result['count'] . ' books associated with it.';
         } else {
             // Delete category
-            $stmt = $pdo->prepare("DELETE FROM categories WHERE id = ?");
+            $stmt = $conn->prepare("DELETE FROM categories WHERE id = ?");
             $stmt->execute([$id]);
             
             // Redirect with success message

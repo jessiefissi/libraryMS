@@ -3,9 +3,11 @@ session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 
-// Check if user is logged in and is admin
+$database = new Database();
+$db = $database->getConnection();
 $auth = new Auth($db);
 
+// Check if user is logged in and is admin
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     header('Location: ../../auth/login.php');
     exit();
@@ -17,32 +19,46 @@ $currentDate = date('Y-m-d');
 // Get overview statistics
 try {
     // Total books
-    $stmt = $db->query("SELECT COUNT(*) as total_books FROM books");
-    $totalBooks = $stmt->fetch()['total_books'];
+    $result = $db->query("SELECT COUNT(*) as total_books FROM books");
+    $row = $result->fetch_assoc();
+    $totalBooks = $row['total_books'];
     
     // Total users
-    $stmt = $db->query("SELECT COUNT(*) as total_users FROM users WHERE role = 'user'");
-    $totalUsers = $stmt->fetch()['total_users'];
+    $result = $db->query("SELECT COUNT(*) as total_users FROM users WHERE role = 'user'");
+    $row = $result->fetch_assoc();
+    $totalUsers = $row['total_users'];
     
     // Currently issued books
-    $stmt = $db->query("SELECT COUNT(*) as issued_books FROM issued_books WHERE status = 'issued'");
-    $issuedBooks = $stmt->fetch()['issued_books'];
+    $result = $db->query("SELECT COUNT(*) as issued_books FROM issued_books WHERE status = 'issued'");
+    $row = $result->fetch_assoc();
+    $issuedBooks = $row['issued_books'];
     
     // Total fines
-    $stmt = $db->query("SELECT SUM(amount) as total_fines FROM fines");
-    $totalFines = $stmt->fetch()['total_fines'] ?: 0;
+    $result = $db->query("SELECT SUM(amount) as total_fines FROM fines");
+    $row = $result->fetch_assoc();
+    $totalFines = $row['total_fines'] ?: 0;
     
     // Overdue books
     $stmt = $db->prepare("SELECT COUNT(*) as overdue_books FROM issued_books WHERE status = 'issued' AND return_date < ?");
-    $stmt->execute([$currentDate]);
-    $overdueBooks = $stmt->fetch()['overdue_books'];
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
+    $stmt->bind_param('s', $currentDate);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $overdueBooks = $row['overdue_books'];
+    $stmt->close();
     
     // Recent activity (last 30 days)
     $stmt = $db->prepare("SELECT COUNT(*) as recent_issues FROM issued_books WHERE issue_date >= DATE_SUB(?, INTERVAL 30 DAY)");
-    $stmt->execute([$currentDate]);
-    $recentIssues = $stmt->fetch()['recent_issues'];
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
+    $stmt->bind_param('s', $currentDate);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $recentIssues = $row['recent_issues'];
+    $stmt->close();
 
-} catch (PDOException $e) {
+} catch (Exception $e) {
     $error = "Database error: " . $e->getMessage();
 }
 
@@ -56,18 +72,20 @@ try {
         FROM issued_books 
         WHERE issue_date >= DATE_SUB(?, INTERVAL 12 MONTH)
         GROUP BY YEAR(issue_date), MONTH(issue_date)
-        ORDER BY year, month
-    ");
-    $stmt->execute([$currentDate]);
-    $monthlyStats = $stmt->fetchAll();
-} catch (PDOException $e) {
+        ORDER BY year, month");
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
+    $stmt->bind_param('s', $currentDate);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $monthlyStats = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+} catch (Exception $e) {
     $monthlyStats = [];
 }
 
 // Get popular categories
 try {
-    $stmt = $db->query("
-        SELECT 
+    $result = $db->query("SELECT 
             c.name as category_name,
             COUNT(ib.id) as issue_count
         FROM categories c
@@ -75,10 +93,10 @@ try {
         LEFT JOIN issued_books ib ON b.id = ib.book_id
         GROUP BY c.id, c.name
         ORDER BY issue_count DESC
-        LIMIT 5
-    ");
-    $popularCategories = $stmt->fetchAll();
-} catch (PDOException $e) {
+        LIMIT 5");
+    if (!$result) throw new Exception("Query failed: " . $db->error);
+    $popularCategories = $result->fetch_all(MYSQLI_ASSOC);
+} catch (Exception $e) {
     $popularCategories = [];
 }
 

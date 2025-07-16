@@ -4,6 +4,10 @@ require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
 
+$database = new Database();
+$db = $database->getConnection();
+$auth = new Auth($db);
+
 // Check if user is logged in and is admin
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
     redirect('/auth/login.php');
@@ -14,16 +18,13 @@ if (!$user_id) {
     redirect('/admin/users/index.php');
 }
 
-$database = new Database();
-$db = $database->getConnection();
-$auth = new Auth($db);
-
 // Fetch user details
 $query = "SELECT * FROM users WHERE id = ?";
 $stmt = $db->prepare($query);
-$stmt->bindParam(1, $user_id);
+$stmt->bind_param('i', $user_id);
 $stmt->execute();
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
+$result = $stmt->get_result();
+$user = $result->fetch_assoc();
 
 if (!$user) {
     redirect('/admin/users/index.php');
@@ -41,9 +42,10 @@ $statsQuery = "SELECT
     WHERE u.id = ?
     GROUP BY u.id";
 $statsStmt = $db->prepare($statsQuery);
-$statsStmt->bindParam(1, $user_id);
+$statsStmt->bind_param('i', $user_id);
 $statsStmt->execute();
-$stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+$result = $statsStmt->get_result();
+$stats = $result->fetch_assoc();
 
 if (!$stats) {
     $stats = ['current_books' => 0, 'total_borrowed' => 0, 'returned_books' => 0, 'total_fines' => 0];
@@ -56,9 +58,10 @@ $currentBooksQuery = "SELECT b.title, b.author, b.isbn, ib.issue_date, ib.return
     WHERE ib.user_id = ? AND ib.status = 'issued'
     ORDER BY ib.issue_date DESC";
 $currentBooksStmt = $db->prepare($currentBooksQuery);
-$currentBooksStmt->bindParam(1, $user_id);
+$currentBooksStmt->bind_param('i', $user_id);
 $currentBooksStmt->execute();
-$currentBooks = $currentBooksStmt->fetchAll(PDO::FETCH_ASSOC);
+$result = $currentBooksStmt->get_result();
+$currentBooks = $result->fetch_all(MYSQLI_ASSOC);
 
 // Get borrowing history
 $historyQuery = "SELECT b.title, b.author, b.isbn, ib.issue_date, ib.return_date, ib.status
@@ -68,9 +71,10 @@ $historyQuery = "SELECT b.title, b.author, b.isbn, ib.issue_date, ib.return_date
     ORDER BY ib.issue_date DESC
     LIMIT 10";
 $historyStmt = $db->prepare($historyQuery);
-$historyStmt->bindParam(1, $user_id);
+$historyStmt->bind_param('i', $user_id);
 $historyStmt->execute();
-$history = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
+$result = $historyStmt->get_result();
+$history = $result->fetch_all(MYSQLI_ASSOC);
 
 // Get fines
 $finesQuery = "SELECT f.amount, f.due_date, b.title, b.author
@@ -79,9 +83,10 @@ $finesQuery = "SELECT f.amount, f.due_date, b.title, b.author
     WHERE f.user_id = ?
     ORDER BY f.due_date DESC";
 $finesStmt = $db->prepare($finesQuery);
-$finesStmt->bindParam(1, $user_id);
+$finesStmt->bind_param('i', $user_id);
 $finesStmt->execute();
-$fines = $finesStmt->fetchAll(PDO::FETCH_ASSOC);
+$result = $finesStmt->get_result();
+$fines = $result->fetch_all(MYSQLI_ASSOC);
 
 $pageTitle = 'View User - Admin';
 include '../../includes/header.php';

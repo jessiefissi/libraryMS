@@ -3,6 +3,9 @@ session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
+$database = new Database();
+$db = $database->getConnection();
+// Remove $conn = $db->getConnection();
 
 // Check if user is admin
 requireAdmin();
@@ -12,9 +15,12 @@ $errors = [];
 $success = '';
 
 // Get book data
-$stmt = $pdo->prepare("SELECT * FROM books WHERE id = ?");
-$stmt->execute([$book_id]);
-$book = $stmt->fetch();
+$stmt = $db->prepare("SELECT * FROM books WHERE id = ?");
+$stmt->bind_param('i', $book_id);
+$stmt->execute();
+$result = $stmt->get_result();
+$book = $result->fetch_assoc();
+$stmt->close();
 
 if (!$book) {
     header('Location: ' . Auth::baseUrl() . '/admin/books/index.php');
@@ -22,7 +28,8 @@ if (!$book) {
 }
 
 // Get categories for dropdown
-$categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
+$catResult = $db->query("SELECT * FROM categories ORDER BY name ASC");
+$categories = $catResult->fetch_all(MYSQLI_ASSOC);
 
 if ($_POST) {
     $title = trim($_POST['title']);
@@ -52,18 +59,24 @@ if ($_POST) {
     
     // Check if ISBN already exists (excluding current book)
     if (empty($errors)) {
-        $stmt = $pdo->prepare("SELECT id FROM books WHERE isbn = ? AND id != ?");
-        $stmt->execute([$isbn, $book_id]);
-        if ($stmt->fetch()) {
+        $stmt = $db->prepare("SELECT id FROM books WHERE isbn = ? AND id != ?");
+        $stmt->bind_param('si', $isbn, $book_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->fetch_assoc()) {
             $errors[] = 'A book with this ISBN already exists';
         }
+        $stmt->close();
     }
     
     // Check if we can reduce quantity (make sure we don't go below issued books)
     if (empty($errors) && $quantity < $book['quantity']) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) as issued FROM issued_books WHERE book_id = ? AND status = 'issued'");
-        $stmt->execute([$book_id]);
-        $issued_count = $stmt->fetch()['issued'];
+        $stmt = $db->prepare("SELECT COUNT(*) as issued FROM issued_books WHERE book_id = ? AND status = 'issued'");
+        $stmt->bind_param('i', $book_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $issued_count = $result->fetch_assoc()['issued'];
+        $stmt->close();
         
         if ($quantity < $issued_count) {
             $errors[] = "Cannot reduce quantity below $issued_count (currently issued copies)";
@@ -72,14 +85,18 @@ if ($_POST) {
     
     // Update book if no errors
     if (empty($errors)) {
-        $stmt = $pdo->prepare("UPDATE books SET title = ?, author = ?, isbn = ?, category_id = ?, quantity = ? WHERE id = ?");
+        $stmt = $db->prepare("UPDATE books SET title = ?, author = ?, isbn = ?, category_id = ?, quantity = ? WHERE id = ?");
+        $stmt->bind_param('sssiii', $title, $author, $isbn, $category_id, $quantity, $book_id);
         
-        if ($stmt->execute([$title, $author, $isbn, $category_id, $quantity, $book_id])) {
+        if ($stmt->execute()) {
             $success = 'Book updated successfully!';
             // Refresh book data
-            $stmt = $pdo->prepare("SELECT * FROM books WHERE id = ?");
-            $stmt->execute([$book_id]);
-            $book = $stmt->fetch();
+            $stmt = $db->prepare("SELECT * FROM books WHERE id = ?");
+            $stmt->bind_param('i', $book_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $book = $result->fetch_assoc();
+            $stmt->close();
         } else {
             $errors[] = 'Failed to update book. Please try again.';
         }
@@ -207,9 +224,12 @@ include '../../includes/header.php';
                                    value="<?php echo htmlspecialchars($_POST['quantity'] ?? $book['quantity']); ?>">
                             <?php
                             // Show current issued count
-                            $stmt = $pdo->prepare("SELECT COUNT(*) as issued FROM issued_books WHERE book_id = ? AND status = 'issued'");
-                            $stmt->execute([$book_id]);
-                            $issued_count = $stmt->fetch()['issued'];
+                            $stmt = $db->prepare("SELECT COUNT(*) as issued FROM issued_books WHERE book_id = ? AND status = 'issued'");
+                            $stmt->bind_param('i', $book_id);
+                            $stmt->execute();
+                            $result = $stmt->get_result();
+                            $issued_count = $result->fetch_assoc()['issued'];
+                            $stmt->close();
                             if ($issued_count > 0):
                             ?>
                                 <p class="mt-1 text-sm text-gray-600">

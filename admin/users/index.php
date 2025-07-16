@@ -36,22 +36,37 @@ if ($search) {
 
 // Get total users count
 try {
-    $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM users" . $searchQuery);
-    $stmt->execute($searchParams);
-    $totalUsers = $stmt->fetchColumn();
+    $stmt = $db->prepare("SELECT COUNT(*) as total FROM users" . $searchQuery);
+    if (!empty($searchParams)) {
+        $types = str_repeat('s', count($searchParams));
+        $stmt->bind_param($types, ...$searchParams);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $totalUsers = $result->fetch_assoc()['total'];
     $totalPages = ceil($totalUsers / $limit);
-} catch (PDOException $e) {
+} catch (Exception $e) {
     $totalUsers = 0;
     $totalPages = 0;
 }
 
 // Get users
 try {
-    $stmt = $pdo->prepare("SELECT * FROM users" . $searchQuery . " ORDER BY name LIMIT ? OFFSET ?");
-    $params = array_merge($searchParams, [$limit, $offset]);
-    $stmt->execute($params);
-    $users = $stmt->fetchAll();
-} catch (PDOException $e) {
+    $stmt = $db->prepare("SELECT * FROM users" . $searchQuery . " ORDER BY name LIMIT ? OFFSET ?");
+    $types = '';
+    $params = [];
+    if (!empty($searchParams)) {
+        $types .= str_repeat('s', count($searchParams));
+        $params = $searchParams;
+    }
+    $types .= 'ii';
+    $params[] = $limit;
+    $params[] = $offset;
+    $stmt->bind_param($types, ...$params);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $users = $result->fetch_all(MYSQLI_ASSOC);
+} catch (Exception $e) {
     $users = [];
 }
 

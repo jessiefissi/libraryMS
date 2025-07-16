@@ -38,10 +38,11 @@ if (!empty($search)) {
     $params[] = "%$search%";
 }
 
+// Fix: Use correct column for paid status (should be f.paid, not f.paid_date)
 if ($status_filter === 'paid') {
-    $where_conditions[] = "f.paid_date IS NOT NULL";
+    $where_conditions[] = "f.paid = 1";
 } elseif ($status_filter === 'unpaid') {
-    $where_conditions[] = "f.paid_date IS NULL";
+    $where_conditions[] = "f.paid = 0";
 }
 
 $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
@@ -64,14 +65,30 @@ $query = "SELECT f.*, b.title, b.author, u.name as user_name, u.email as user_em
 
 try {
     // Get total count
-    $count_stmt = $pdo->prepare($count_query);
-    $count_stmt->execute($params);
-    $total_records = $count_stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    $count_stmt = $db->prepare($count_query);
+    if (!$count_stmt) {
+        throw new Exception("Failed to prepare count query: " . $db->error);
+    }
+    if (!empty($params)) {
+        $types = str_repeat('s', count($params));
+        $count_stmt->bind_param($types, ...$params);
+    }
+    $count_stmt->execute();
+    $result = $count_stmt->get_result();
+    $total_records = $result->fetch_assoc()['total'];
     
     // Get paginated results
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $fines = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare($query);
+    if (!$stmt) {
+        throw new Exception("Failed to prepare main query: " . $db->error);
+    }
+    if (!empty($params)) {
+        $types = str_repeat('s', count($params));
+        $stmt->bind_param($types, ...$params);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $fines = $result->fetch_all(MYSQLI_ASSOC);
     
     $total_pages = ceil($total_records / $records_per_page);
     
@@ -81,13 +98,18 @@ try {
                     SUM(CASE WHEN paid_date IS NULL THEN amount ELSE 0 END) as unpaid_amount,
                     SUM(CASE WHEN paid_date IS NOT NULL THEN amount ELSE 0 END) as paid_amount
                     FROM fines";
-    $stats_stmt = $pdo->prepare($stats_query);
+    $stats_stmt = $db->prepare($stats_query);
+    if (!$stats_stmt) {
+        throw new Exception("Failed to prepare stats query: " . $db->error);
+    }
     $stats_stmt->execute();
-    $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
+    $result = $stats_stmt->get_result();
+    $stats = $result->fetch_assoc();
     
-} catch (PDOException $e) {
+} catch (Exception $e) {
     $error = "Database error: " . $e->getMessage();
     $fines = [];
+    $total_records = 0;
     $total_pages = 0;
     $stats = ['total_fines' => 0, 'unpaid_amount' => 0, 'paid_amount' => 0];
 }
@@ -277,7 +299,7 @@ $page_title = "Fines Management";
                                                 <?php echo date('M j, Y', strtotime($fine['due_date'])); ?>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
-                                                <?php if ($fine['paid_date']): ?>
+                                                <?php if ($fine['paid']): ?>
                                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                                         <i class="fas fa-check-circle mr-1"></i>Paid
                                                     </span>
@@ -292,7 +314,7 @@ $page_title = "Fines Management";
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div class="flex space-x-2">
-                                                    <?php if (!$fine['paid_date']): ?>
+                                                    <?php if (!$fine['paid']): ?>
                                                         <a href="pay.php?id=<?php echo $fine['id']; ?>" 
                                                            class="text-green-600 hover:text-green-900">
                                                             <i class="fas fa-dollar-sign"></i> Pay

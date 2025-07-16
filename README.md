@@ -1,6 +1,6 @@
-# Library Management System
+# Library Operations System
 
-A modern, full-featured Library Management System (LMS) built with PHP and MySQL, designed for both administrators and users. The system provides robust book, user, and fine management, real-time analytics, and a responsive, mobile-friendly interface.
+A modern, full-featured Library Operations System (LOS) built with PHP and MySQL, designed for both administrators and users. The system provides robust book, user, and fine management, real-time analytics, and a responsive, mobile-friendly interface.
 
 ---
 

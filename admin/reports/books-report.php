@@ -3,6 +3,10 @@ session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 
+// Database connection
+$database = new Database();
+$db = $database->getConnection();
+
 // Check if user is logged in and is admin
 $auth = new Auth($db);
 
@@ -18,11 +22,11 @@ $date_to = $_GET['date_to'] ?? date('Y-m-d');
 
 try {
     // Get categories for filter
-    $stmt = $db->query("SELECT id, name FROM categories ORDER BY name");
-    $categories = $stmt->fetchAll();
+    $result = $db->query("SELECT id, name FROM categories ORDER BY name");
+    $categories = $result->fetch_all(MYSQLI_ASSOC);
     
     // Get books statistics
-    $stmt = $db->query("
+    $result = $db->query("
         SELECT 
             b.id,
             b.title,
@@ -40,11 +44,10 @@ try {
         GROUP BY b.id, b.title, b.author, b.isbn, b.quantity, c.name
         ORDER BY total_issues DESC
     ");
-    $books = $stmt->fetchAll();
+    $books = $result->fetch_all(MYSQLI_ASSOC);
     
     // Get most popular books
-    $stmt = $db->prepare("
-        SELECT 
+    $query = "SELECT 
             b.title,
             b.author,
             c.name as category_name,
@@ -53,20 +56,23 @@ try {
         LEFT JOIN categories c ON b.category_id = c.id
         LEFT JOIN issued_books ib ON b.id = ib.book_id
         WHERE ib.issue_date BETWEEN ? AND ?
-        " . ($category_filter ? "AND c.id = ?" : "") . "
+        ".($category_filter ? "AND c.id = ?" : "")."
         GROUP BY b.id, b.title, b.author, c.name
         HAVING issue_count > 0
         ORDER BY issue_count DESC
-        LIMIT 10
-    ");
-    
-    $params = [$date_from, $date_to];
+        LIMIT 10";
+    $stmt = $db->prepare($query);
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
     if ($category_filter) {
-        $params[] = $category_filter;
+        $stmt->bind_param('ssi', $date_from, $date_to, $category_filter);
+    } else {
+        $stmt->bind_param('ss', $date_from, $date_to);
     }
-    $stmt->execute($params);
-    $popularBooks = $stmt->fetchAll();
-    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $popularBooks = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
     // Get category statistics
     $stmt = $db->prepare("
         SELECT 
@@ -82,8 +88,12 @@ try {
         GROUP BY c.id, c.name
         ORDER BY total_issues DESC
     ");
-    $stmt->execute([$date_from, $date_to]);
-    $categoryStats = $stmt->fetchAll();
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
+    $stmt->bind_param('ss', $date_from, $date_to);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $categoryStats = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
     
     // Get overdue books
     $stmt = $db->prepare("
@@ -101,11 +111,14 @@ try {
         WHERE ib.status = 'issued' AND ib.return_date < NOW()
         ORDER BY days_overdue DESC
     ");
+    if (!$stmt) throw new Exception("Prepare failed: " . $db->error);
     $stmt->execute();
-    $overdueBooks = $stmt->fetchAll();
-    
+    $result = $stmt->get_result();
+    $overdueBooks = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
     // Get summary statistics
-    $stmt = $db->query("
+    $result = $db->query("
         SELECT 
             COUNT(DISTINCT b.id) as total_books,
             SUM(b.quantity) as total_inventory,
@@ -116,7 +129,7 @@ try {
         LEFT JOIN categories c ON b.category_id = c.id
         LEFT JOIN issued_books ib ON b.id = ib.book_id
     ");
-    $summary = $stmt->fetch();
+    $summary = $result->fetch_assoc();
 
 } catch (PDOException $e) {
     $error = "Database error: " . $e->getMessage();
@@ -129,7 +142,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Books Report - Library Management</title>
+    <title>Books Report - Library Operations System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -145,7 +158,7 @@ try {
                 <div class="flex justify-between items-center">
                     <div>
                         <h1 class="text-3xl font-bold text-gray-800">Books Report</h1>
-                        <p class="text-gray-600 mt-2">Detailed analytics and statistics for your book collection</p>
+                        <p class="text-gray-600 mt-2">Detailed analytics and statistics for your book collection (Library Operations System)</p>
                     </div>
                     <div class="flex space-x-2">
                         <button onclick="window.print()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">

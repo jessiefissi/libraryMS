@@ -2,7 +2,9 @@
 session_start();
 require_once '../config/database.php';
 require_once '../config/constants.php';
-
+$database = new Database();
+$db = $database->getConnection();
+$conn = $db->getConnection();
 // Redirect if already logged in
 if (isset($_SESSION['user_id'])) {
     header('Location: ' . ($_SESSION['role'] === 'admin' ? '../admin/' : '../user/'));
@@ -41,7 +43,7 @@ if ($_POST) {
     
     // Check if email already exists
     if (empty($errors)) {
-        $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
         $stmt->execute([$email]);
         if ($stmt->fetch()) {
             $errors[] = 'Email already exists';
@@ -51,7 +53,7 @@ if ($_POST) {
     // Insert user if no errors
     if (empty($errors)) {
         $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'user')");
+        $stmt = $conn->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'user')");
         
         if ($stmt->execute([$name, $email, $hashed_password])) {
             $success = 'Registration successful! You can now login.';

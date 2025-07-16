@@ -3,6 +3,8 @@ session_start();
 require_once '../../config/database.php';
 require_once '../../config/auth.php';
 require_once '../../includes/functions.php';
+$database = new Database();
+$db = $database->getConnection();
 $auth = new Auth($db);
 // Check if user is admin
 if (!$auth->isLoggedIn() || !$auth->isAdmin()) {
@@ -30,14 +32,16 @@ $books_query = "SELECT b.*, c.name as category_name,
 $users_query = "SELECT * FROM users WHERE role = 'user' ORDER BY name";
 
 try {
-    $books_stmt = $pdo->prepare($books_query);
+    $books_stmt = $db->prepare($books_query);
     $books_stmt->execute();
-    $available_books = $books_stmt->fetchAll(PDO::FETCH_ASSOC);
+    $result = $books_stmt->get_result();
+    $available_books = $result->fetch_all(MYSQLI_ASSOC);
     
-    $users_stmt = $pdo->prepare($users_query);
+    $users_stmt = $db->prepare($users_query);
     $users_stmt->execute();
-    $users = $users_stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
+    $result = $users_stmt->get_result();
+    $users = $result->fetch_all(MYSQLI_ASSOC);
+} catch (Exception $e) {
     $error = "Database error: " . $e->getMessage();
 }
 
@@ -64,26 +68,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         WHERE b.id = ?";
         
         try {
-            $check_stmt = $pdo->prepare($check_query);
-            $check_stmt->execute([$book_id]);
-            $book = $check_stmt->fetch(PDO::FETCH_ASSOC);
+            $check_stmt = $db->prepare($check_query);
+            $check_stmt->bind_param('i', $book_id);
+            $check_stmt->execute();
+            $result = $check_stmt->get_result();
+            $book = $result->fetch_assoc();
             
             if (!$book || $book['available_quantity'] <= 0) {
                 $error = "Book is not available for issuing.";
             } else {
                 // Check if user already has this book
                 $user_has_book_query = "SELECT * FROM issued_books WHERE book_id = ? AND user_id = ? AND status = 'issued'";
-                $user_has_book_stmt = $pdo->prepare($user_has_book_query);
-                $user_has_book_stmt->execute([$book_id, $user_id]);
-                
-                if ($user_has_book_stmt->rowCount() > 0) {
+                $user_has_book_stmt = $db->prepare($user_has_book_query);
+                $user_has_book_stmt->bind_param('ii', $book_id, $user_id);
+                $user_has_book_stmt->execute();
+                $result = $user_has_book_stmt->get_result();
+                if ($result->num_rows > 0) {
                     $error = "User already has this book issued.";
                 } else {
                     // Issue the book
                     $issue_query = "INSERT INTO issued_books (book_id, user_id, issue_date, return_date, status) 
                                    VALUES (?, ?, CURDATE(), ?, 'issued')";
-                    $issue_stmt = $pdo->prepare($issue_query);
-                    $issue_stmt->execute([$book_id, $user_id, $return_date]);
+                    $issue_stmt = $db->prepare($issue_query);
+                    $issue_stmt->bind_param('iis', $book_id, $user_id, $return_date);
+                    $issue_stmt->execute();
                     
                     $message = "Book issued successfully!";
                     
@@ -92,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
             }
-        } catch (PDOException $e) {
+        } catch (Exception $e) {
             $error = "Database error: " . $e->getMessage();
         }
     }
